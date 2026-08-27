@@ -274,6 +274,13 @@ execução, então é seguro truncar tabelas nele; o Chromium do Playwright é
 instalado num passo dedicado, já que o runner do GitHub Actions não vem com
 ele pré-instalado).
 
+## Deploy
+
+Ainda não deployado em produção. Checklist completo para o primeiro deploy
+na Vercel (variáveis de ambiente, banco com pooling, verificação de domínio
+na Resend, migrations, criação do primeiro admin da plataforma) em
+[`docs/deploy-vercel.md`](docs/deploy-vercel.md).
+
 ## Estrutura de pastas
 
 ```
