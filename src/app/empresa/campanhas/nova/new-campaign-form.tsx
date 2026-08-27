@@ -57,6 +57,14 @@ export function NewCampaignForm() {
         <TextField id="startDate" name="startDate" label="Início (opcional)" type="date" required={false} />
         <TextField id="endDate" name="endDate" label="Fim (opcional)" type="date" required={false} />
       </div>
+      <TextField
+        id="destinationUrl"
+        name="destinationUrl"
+        label="URL de destino do link (opcional)"
+        type="url"
+        required={false}
+        errors={state?.errors?.destinationUrl}
+      />
       {state?.message && <p className="text-sm text-red-600 dark:text-red-400">{state.message}</p>}
       <SubmitButton>Criar campanha</SubmitButton>
     </form>

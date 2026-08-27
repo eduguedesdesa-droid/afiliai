@@ -233,6 +233,10 @@ model Campaign {
   endDate               DateTime?
   attributionWindowDays Int               @default(30)
   leadToSaleWindowDays  Int?
+  /// Para onde /r/[code] redireciona quando conversionType=SALE (página do
+  /// produto/checkout da empresa). Se vazio, cai numa página interna de
+  /// fallback (/c/[campaignId]) mostrando o cupom do afiliado, se houver.
+  destinationUrl        String?
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
@@ -382,7 +386,9 @@ model Coupon {
 }
 
 /// Sessão de atribuição de um visitante (cookie), usada para ligar um clique
-////cupom a um lead ou venda posterior dentro da janela de atribuição.
+/// ou cupom a um lead ou venda posterior dentro da janela de atribuição.
+/// Uma sessão por (empresa, visitante): last-click dentro da empresa —
+/// o clique mais recente sobrescreve affiliateLinkId/expiresAt.
 model TrackingSession {
   id              String   @id @default(uuid(7))
   companyId       String
@@ -398,7 +404,7 @@ model TrackingSession {
   coupon        Coupon?        @relation(fields: [couponId], references: [id], onDelete: SetNull)
   leads         Lead[]
 
-  @@index([companyId, visitorId])
+  @@unique([companyId, visitorId])
   @@index([expiresAt])
   @@map("tracking_sessions")
 }

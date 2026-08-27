@@ -3,12 +3,25 @@
 Links rastreáveis, cupons, cliques, sessões de atribuição e os resolvers de
 atribuição (cupom, link, link+cupom, lead).
 
-**Status:** parcialmente implementado — `service.ts` gera o código único de
-cupom/link quando um afiliado é aprovado numa campanha (chamado a partir do
-módulo `affiliates`).
+**Status:** implementado (Fase 1 e 2):
 
-Ainda não implementado (Fase 2): o endpoint público `/r/[code]` de
-redirecionamento, captura de clique (`Click`), criação de `TrackingSession`
-por visitante/cookie, aplicação de cupom em checkout, captura de lead via
-formulário público, e os resolvers de atribuição que ligam uma venda de
-volta ao afiliado certo dentro da janela de atribuição da campanha.
+- Geração de código único de cupom/link ao aprovar um afiliado numa campanha
+  (`ensureCouponForCampaignAffiliate`, `ensureAffiliateLinkForCampaignAffiliate`).
+- Endpoint público `GET /r/[code]` (`src/app/r/[code]/route.ts`): resolve o
+  link, registra o clique (`Click`), incrementa `AffiliateLink.clicksCount`
+  e faz upsert da `TrackingSession` do visitante (cookie `afiliai_visitor`).
+- **Regra de atribuição: last-click por empresa.** Cada clique num link de
+  qualquer afiliado da mesma empresa sobrescreve a sessão de atribuição do
+  visitante (`affiliateLinkId` + `expiresAt` recalculado pela
+  `attributionWindowDays` da campanha do clique mais recente). Documentado
+  aqui porque é uma decisão de produto, não só técnica — ver risco
+  correspondente no plano de arquitetura original.
+- `resolveAttributionForVisitor(companyId, visitorId, campaignId)`: usado
+  pela captura de lead (`src/modules/leads/actions.ts`) e pela página
+  pública de fallback (`src/app/c/[campaignId]`) para decidir se/qual
+  afiliado recebe o crédito, validando que a sessão não expirou e que
+  aponta para a mesma campanha.
+
+Ainda não implementado: aplicação automática de cupom em checkout externo
+(depende de integração com a loja/e-commerce da empresa — fora do escopo até
+haver um alvo de integração real), detecção de fraude/cliques abusivos.

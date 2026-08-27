@@ -6,6 +6,15 @@ const dateField = z
   .nullish()
   .transform((value) => (value ? new Date(value) : null));
 
+const optionalUrlField = z
+  .string()
+  .trim()
+  .nullish()
+  .transform((value) => (value ? value : null))
+  .refine((value) => value === null || z.url().safeParse(value).success, {
+    error: "Informe uma URL válida (começando com http:// ou https://).",
+  });
+
 export const createCampaignSchema = z.object({
   name: z.string().trim().min(2, { error: "Informe o nome da campanha." }),
   description: z.string().trim().nullish(),
@@ -17,6 +26,11 @@ export const createCampaignSchema = z.object({
   attributionWindowDays: z.coerce.number().int().min(1).max(365).default(30),
   startDate: dateField,
   endDate: dateField,
+  destinationUrl: optionalUrlField,
+});
+
+export const destinationUrlSchema = z.object({
+  destinationUrl: optionalUrlField,
 });
 
 /**

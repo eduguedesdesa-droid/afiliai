@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireContext } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
+import { env } from "@/lib/env";
 import { Badge } from "@/components/ui/badge";
 import {
   CAMPAIGN_STATUS_LABEL,
@@ -11,6 +12,7 @@ import {
 } from "@/modules/campaigns/labels";
 import { setCampaignStatus } from "@/modules/campaigns/actions";
 import { RewardRuleForm } from "./reward-rule-form";
+import { DestinationForm } from "./destination-form";
 
 const NEXT_STATUS: Record<string, { status: string; label: string }[]> = {
   DRAFT: [{ status: "ACTIVE", label: "Ativar campanha" }],
@@ -34,13 +36,14 @@ export default async function CampanhaDetalhePage({ params }: { params: Promise<
     where: { id, companyId },
     include: {
       rewardRules: true,
-      _count: { select: { campaignAffiliates: true, sales: true } },
+      _count: { select: { campaignAffiliates: true, sales: true, leads: true } },
     },
   });
 
   if (!campaign) notFound();
 
   const rewardRule = campaign.rewardRules[0] ?? null;
+  const usesLink = campaign.attributionMethod !== "COUPON";
 
   return (
     <div className="flex flex-col gap-8">
@@ -54,7 +57,9 @@ export default async function CampanhaDetalhePage({ params }: { params: Promise<
           <p className="mt-2 text-xs text-zinc-500">
             {ATTRIBUTION_METHOD_LABEL[campaign.attributionMethod]} · janela de atribuição de{" "}
             {campaign.attributionWindowDays} dias · {campaign._count.campaignAffiliates} afiliado(s) ·{" "}
-            {campaign._count.sales} venda(s)
+            {campaign.conversionType === "LEAD"
+              ? `${campaign._count.leads} lead(s)`
+              : `${campaign._count.sales} venda(s)`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -86,6 +91,20 @@ export default async function CampanhaDetalhePage({ params }: { params: Promise<
           existing={rewardRule ? { rewardType: rewardRule.rewardType, value: rewardRule.value?.toString() ?? "" } : null}
         />
       </section>
+
+      {usesLink && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Link de destino</h2>
+          <p className="text-sm text-zinc-500">
+            {campaign.conversionType === "LEAD"
+              ? `O link de cada afiliado (${env.APP_URL}/r/{código}) leva direto ao formulário de lead desta campanha — não precisa configurar destino.`
+              : "Para onde o link de cada afiliado leva o visitante, antes de aplicar o cupom/atribuição."}
+          </p>
+          {campaign.conversionType === "SALE" && (
+            <DestinationForm campaignId={campaign.id} currentUrl={campaign.destinationUrl} />
+          )}
+        </section>
+      )}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Afiliados</h2>

@@ -4,8 +4,8 @@ Plataforma SaaS de marketing de indicação e afiliados para empresas —
 campanhas, cupons, links rastreáveis, leads, vendas e comissões, com
 multi-tenancy real e suporte a múltiplos papéis por usuário.
 
-Este README documenta o que já está implementado (Fase 0 + fundação da Fase
-1 do plano de implementação) e como rodar o projeto localmente. A arquitetura
+Este README documenta o que já está implementado (Fases 0, 1 e 2 do plano de
+implementação) e como rodar o projeto localmente. A arquitetura
 completa (schema de banco, decisões técnicas, riscos, plano de etapas) foi
 discutida e aprovada antes da implementação — ver `docs/adr/` para decisões
 específicas à medida que forem registradas.
@@ -43,15 +43,37 @@ específicas à medida que forem registradas.
   (campanhas, afiliados, leads, vendas, comissões, etc.) existem como rotas
   reais, mas com um aviso de "ainda não implementado" — para não haver links
   quebrados enquanto o restante do plano é construído.
+- **Campanhas e produtos** (`/empresa/campanhas`, `/empresa/produtos`): criar
+  campanha, mudar status (rascunho → ativa → pausada/encerrada), definir
+  regra de recompensa (percentual ou valor fixo) e URL de destino; CRUD de
+  produtos.
+- **Participação de afiliado em campanha**: afiliado solicita participação
+  numa campanha ativa de qualquer empresa (`/afiliado/campanhas-disponiveis`),
+  a empresa aprova ou rejeita (`/empresa/afiliados`). Ao aprovar, cupom e/ou
+  link são **gerados automaticamente** conforme o método de atribuição da
+  campanha.
+- **Tracking de ponta a ponta**: o link do afiliado (`/r/[code]`) registra
+  clique, incrementa o contador e atualiza a sessão de atribuição do
+  visitante (cookie `afiliai_visitor`, regra **last-click por empresa**,
+  respeitando a janela de atribuição da campanha). Daí redireciona para:
+  - o formulário público de lead (`/c/[campaignId]`), em campanhas de LEAD —
+    o lead criado é atribuído ao afiliado certo a partir da sessão do
+    visitante, nunca de um campo do formulário;
+  - a `destinationUrl` configurada na campanha, em campanhas de venda; sem
+    URL configurada, cai numa página interna simples mostrando o cupom do
+    afiliado.
+- **Leads** (`/empresa/leads`): lista os leads recebidos com o afiliado
+  atribuído (ou "direto", quando não há atribuição) e permite mudar o status
+  manualmente.
 - **Esqueleto dos módulos de domínio** (`src/modules/*`) prontos para
   receber a lógica de negócio das próximas fases, cada um com um `README.md`
-  descrevendo seu escopo.
+  descrevendo seu escopo e o que falta.
 
-O que **não** está implementado ainda (fases seguintes do plano): CRUD de
-campanhas/produtos/afiliados, geração de links e cupons, captura de cliques e
-leads, registro de vendas, motor de atribuição e cálculo de comissão,
-relatórios e pagamentos. Ver a raiz de cada módulo em `src/modules/` para o
-escopo planejado.
+O que **não** está implementado ainda (fases seguintes do plano): registro de
+vendas, motor de atribuição para vendas (o de leads já existe), cálculo de
+comissão, aplicação automática de cupom em checkout externo, relatórios e
+pagamentos. Ver a raiz de cada módulo em `src/modules/` para o escopo
+planejado.
 
 ## Rodando localmente
 
@@ -102,6 +124,8 @@ src/
     empresa/            # dashboard e módulos da empresa
     afiliado/           # dashboard e módulos do afiliado
     admin/              # dashboard da plataforma
+    r/[code]/           # redirecionamento público rastreável (route handler)
+    c/[campaignId]/     # página pública de campanha (lead ou fallback de cupom)
   lib/                 # env, prisma client, sessão, DAL, contexto ativo
   modules/             # lógica de domínio por área (auth implementado; os
                          demais são esqueleto para as próximas fases)
