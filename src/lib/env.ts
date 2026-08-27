@@ -12,6 +12,16 @@ const envSchema = z.object({
     .min(32, { error: "SESSION_SECRET precisa ter pelo menos 32 caracteres." }),
   APP_URL: z.url({ error: "APP_URL precisa ser uma URL válida." }).default("http://localhost:3000"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+  // Ausente = modo dev: src/lib/email.ts loga em vez de enviar de verdade
+  // (ver README.md, seção E-mail transacional). Presente = envia via Resend.
+  RESEND_API_KEY: z.string().min(1).optional(),
+  EMAIL_FROM: z
+    .string()
+    .min(1, { error: "EMAIL_FROM não pode ser vazio." })
+    // Sender de teste do Resend — funciona sem domínio verificado, mas só
+    // entrega para o e-mail da própria conta Resend. Trocar por um remetente
+    // do domínio verificado da empresa antes de ir a produção.
+    .default("Afiliai <onboarding@resend.dev>"),
 });
 
 const parsed = envSchema.safeParse({
@@ -19,6 +29,8 @@ const parsed = envSchema.safeParse({
   SESSION_SECRET: process.env.SESSION_SECRET,
   APP_URL: process.env.APP_URL,
   NODE_ENV: process.env.NODE_ENV,
+  RESEND_API_KEY: process.env.RESEND_API_KEY,
+  EMAIL_FROM: process.env.EMAIL_FROM,
 });
 
 if (!parsed.success) {
