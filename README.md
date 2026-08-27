@@ -135,9 +135,11 @@ pnpm db:seed      # popula um cenário de demonstração (opcional, mas recomend
 pnpm dev          # http://localhost:3000
 ```
 
-Para rodar os testes de integração (opcional): crie um banco dedicado
-(`createdb afiliai_test`) e aponte `TEST_DATABASE_URL` para ele no `.env` —
-ver seção Testes abaixo.
+Para rodar os testes de integração/E2E (opcional): crie bancos dedicados
+(`createdb afiliai_test`, `createdb afiliai_e2e`) e aponte
+`TEST_DATABASE_URL`/`E2E_DATABASE_URL` para eles no `.env` — ver seção
+Testes abaixo. Os testes E2E também precisam do Chromium que já vem com o
+Playwright (`pnpm exec playwright install chromium`, uma vez só).
 
 ### Contas do seed (`pnpm db:seed`)
 
@@ -209,7 +211,7 @@ Dois reforços feitos nessa revisão:
 
 ## Testes
 
-Duas suítes, com propósitos diferentes:
+Três suítes, com propósitos diferentes:
 
 - **`pnpm test`** — unitários (Vitest), sem banco. Cobre lógica pura:
   schemas de validação (Zod) de cada módulo, geração de CSV (`src/lib/csv.ts`),
@@ -229,13 +231,35 @@ Duas suítes, com propósitos diferentes:
   resolução de atribuição respeitando janela/campanha). Cada teste começa
   truncando todas as tabelas (`src/test/db-reset.ts`) — nunca rodar isso
   contra o banco de desenvolvimento.
+- **`pnpm e2e`** — navegador de verdade (Playwright/Chromium) contra o app
+  rodando de verdade (`next dev`, porta 3100), num terceiro banco dedicado.
+  `e2e/core-flow.spec.ts` é o teste "canhão": cadastro de empresa, criação
+  de campanha (LINK, 10% de comissão), cadastro de afiliado, solicitação e
+  aprovação de participação, clique de um visitante anônimo no link
+  rastreável, registro de uma venda de R$500, aprovação da comissão gerada
+  (R$50), geração e pagamento de um lote — o mesmo cenário do exemplo usado
+  na definição do produto, de ponta a ponta pela UI. `e2e/auth.spec.ts`
+  cobre cadastro/login/logout/senha errada; `e2e/admin.spec.ts` cobre
+  suspender/reativar empresa (e que o bloqueio de acesso é de verdade, não
+  só escondido na navegação). Roda um worker só — os specs compartilham o
+  mesmo servidor/banco pela suíte inteira, sem truncar entre testes; cada
+  um usa dados com nome único (`e2e/helpers/unique.ts`) para não colidir.
+  `scripts/e2e-seed.ts` zera o banco e cria só o que não dá pra criar pela
+  UI (hoje, um admin da plataforma — não existe cadastro público pra esse
+  papel). O rate limit (`src/lib/rate-limit.ts`) é desligado só nesse
+  servidor via `E2E_TESTING=1` (ver comentário no próprio arquivo) — senão
+  a suíte se auto-bloquearia (vários specs fazem login/cadastro "do mesmo
+  IP", localhost). **Não cobre ainda**: o fluxo de recuperação de senha
+  (precisaria capturar o link do e-mail, que só existe no log do servidor
+  em modo dev — validado manualmente até aqui, ver histórico do projeto).
 
-Configure `TEST_DATABASE_URL` no `.env` (ver `.env.example`) apontando para
-um banco **dedicado** (`createdb afiliai_test`, por exemplo) — nunca o mesmo
-do `DATABASE_URL` de desenvolvimento. `pnpm test:integration` aplica as
-migrations nesse banco (`prisma migrate deploy`) antes de rodar.
+Configure `TEST_DATABASE_URL` e `E2E_DATABASE_URL` no `.env` (ver
+`.env.example`) apontando para bancos **dedicados** (`createdb afiliai_test`
+e `createdb afiliai_e2e`) — nunca o mesmo do `DATABASE_URL` de
+desenvolvimento. `pnpm test:integration`/`pnpm e2e` aplicam as migrations
+nesses bancos (`prisma migrate deploy`) antes de rodar.
 
-`pnpm test:all` roda as duas suítes em sequência.
+`pnpm test:all` roda as três suítes em sequência.
 
 ## CI
 
@@ -244,9 +268,11 @@ Postgres de serviço, instala as dependências (`pnpm install
 --frozen-lockfile`, que já dispara `postinstall` → `prisma generate`),
 aplica as migrations do zero (`prisma migrate deploy` — pega drift de
 schema sem migration correspondente), roda `pnpm lint`, `pnpm build` (que
-inclui a checagem de tipos do TypeScript), `pnpm test` e `pnpm test:integration`
-(reusando o mesmo Postgres de serviço — efêmero por execução, então é seguro
-truncar tabelas nele).
+inclui a checagem de tipos do TypeScript), `pnpm test`, `pnpm test:integration`
+e `pnpm e2e` (todos reusando o mesmo Postgres de serviço — efêmero por
+execução, então é seguro truncar tabelas nele; o Chromium do Playwright é
+instalado num passo dedicado, já que o runner do GitHub Actions não vem com
+ele pré-instalado).
 
 ## Estrutura de pastas
 
@@ -269,8 +295,12 @@ src/
   components/          # UI compartilhada
   test/                # helpers de teste (reset de banco, fixtures) — não é um módulo de domínio
   generated/prisma/    # client do Prisma gerado (não editar à mão)
+e2e/                   # testes E2E (Playwright) — ver README.md, seção Testes
+  helpers/
 scripts/
-  with-test-db.mjs     # roda um comando com DATABASE_URL trocada por TEST_DATABASE_URL
+  with-db.mjs          # roda um comando com DATABASE_URL trocada pela env var indicada
+  e2e-seed.ts          # zera o banco de E2E e cria o admin de plataforma pra suíte
+playwright.config.ts
 ```
 
 ## Convenções importantes

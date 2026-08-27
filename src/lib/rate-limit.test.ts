@@ -56,3 +56,25 @@ describe("checkRateLimit", () => {
     expect(second.retryAfterSeconds).toBe(30);
   });
 });
+
+describe("E2E_TESTING bypass", () => {
+  const originalValue = process.env.E2E_TESTING;
+
+  afterEach(() => {
+    if (originalValue === undefined) delete process.env.E2E_TESTING;
+    else process.env.E2E_TESTING = originalValue;
+    vi.resetModules();
+  });
+
+  it("never blocks when E2E_TESTING=1 (only set by the E2E test server)", async () => {
+    process.env.E2E_TESTING = "1";
+    vi.resetModules();
+    const { checkRateLimit: checkRateLimitWithE2eFlag } = await import("@/lib/rate-limit");
+
+    const opts = { limit: 1, windowSeconds: 60 };
+    checkRateLimitWithE2eFlag("k", opts);
+    const result = checkRateLimitWithE2eFlag("k", opts); // seria bloqueado sem o bypass
+
+    expect(result.allowed).toBe(true);
+  });
+});
