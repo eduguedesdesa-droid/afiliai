@@ -5,7 +5,8 @@ campanhas, cupons, links rastreáveis, leads, vendas e comissões, com
 multi-tenancy real e suporte a múltiplos papéis por usuário.
 
 Este README documenta o que já está implementado (Fases 0 a 5 do plano de
-implementação) e como rodar o projeto localmente. A arquitetura
+implementação, incluindo o painel administrativo da plataforma) e como
+rodar o projeto localmente. A arquitetura
 completa (schema de banco, decisões técnicas, riscos, plano de etapas) foi
 discutida e aprovada antes da implementação — ver `docs/adr/` para decisões
 específicas à medida que forem registradas.
@@ -88,6 +89,14 @@ específicas à medida que forem registradas.
   `PAID` de uma vez, pela mesma máquina de estados central da Fase 3. A
   marcação individual de uma comissão (Fase 3) continua funcionando em
   paralelo, para pagamentos avulsos.
+- **Painel admin da plataforma** (`/admin/empresas`, `/admin/usuarios`): o
+  admin suspende/reativa uma empresa ou um usuário. Suspender uma empresa
+  bloqueia o acesso de verdade — `requireContext("COMPANY_MEMBER")`
+  (`src/lib/dal.ts`) checa o status da empresa a cada requisição e
+  redireciona para `/empresa-suspensa`, e o link do afiliado (`/r/[code]`)
+  para de gerar clique/comissão para empresas suspensas. Suspender um
+  usuário derruba todas as sessões ativas dele na hora e bloqueia login. Um
+  admin nunca pode suspender a própria conta.
 - **Esqueleto dos módulos de domínio** (`src/modules/*`) prontos para
   receber a lógica de negócio das próximas fases, cada um com um `README.md`
   descrevendo seu escopo e o que falta.
@@ -95,9 +104,9 @@ específicas à medida que forem registradas.
 O que **não** está implementado ainda: webhook de e-commerce para registrar
 vendas automaticamente (hoje é sempre lançamento manual pela empresa),
 aplicação automática de cupom em checkout externo, integração com um
-provedor de pagamento real (hoje "pago" é sempre uma marcação manual), e o
-painel administrativo da plataforma (`/admin/empresas` e `/admin/usuarios`
-ainda são placeholder — só o dashboard do admin é real). Ver a raiz de cada
+provedor de pagamento real (hoje "pago" é sempre uma marcação manual), e
+moderação de conteúdo individual (campanha/afiliado) no painel admin — hoje
+a moderação é só em nível de empresa/usuário inteiro. Ver a raiz de cada
 módulo em `src/modules/` para o escopo planejado.
 
 ## Rodando localmente

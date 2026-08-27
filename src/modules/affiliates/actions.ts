@@ -17,7 +17,7 @@ export async function requestToJoinCampaign(formData: FormData) {
   if (typeof campaignId !== "string") return;
 
   const campaign = await prisma.campaign.findFirst({
-    where: { id: campaignId, status: "ACTIVE" },
+    where: { id: campaignId, status: "ACTIVE", company: { status: "ACTIVE" } },
     select: { id: true },
   });
   if (!campaign) return;

@@ -79,10 +79,14 @@ type RegisterClickInput = {
 export async function registerClickAndAttribute(input: RegisterClickInput) {
   const affiliateLink = await prisma.affiliateLink.findUnique({
     where: { code: input.code },
-    include: { campaignAffiliate: { include: { campaign: true } } },
+    include: { campaignAffiliate: { include: { campaign: { include: { company: true } } } } },
   });
 
-  if (!affiliateLink || affiliateLink.campaignAffiliate.status !== "APPROVED") {
+  if (
+    !affiliateLink ||
+    affiliateLink.campaignAffiliate.status !== "APPROVED" ||
+    affiliateLink.campaignAffiliate.campaign.company.status !== "ACTIVE"
+  ) {
     return null;
   }
 

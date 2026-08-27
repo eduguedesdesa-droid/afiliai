@@ -104,5 +104,15 @@ export async function requireContext(expectedType: ActiveContext["type"]) {
     redirect("/escolher-contexto");
   }
 
+  // Empresa suspensa pelo admin da plataforma: acesso bloqueado de verdade,
+  // não só escondido na navegação — checado aqui porque toda página de
+  // /empresa passa por requireContext("COMPANY_MEMBER").
+  if (resolved.type === "COMPANY_MEMBER") {
+    const role = user.roles.find((r) => r.role === "COMPANY_MEMBER" && r.companyId === resolved.companyId);
+    if (role?.company && role.company.status !== "ACTIVE") {
+      redirect("/empresa-suspensa");
+    }
+  }
+
   return { user, context: resolved };
 }

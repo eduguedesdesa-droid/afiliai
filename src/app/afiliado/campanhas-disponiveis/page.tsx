@@ -10,6 +10,7 @@ export default async function CampanhasDisponiveisPage() {
   const campaigns = await prisma.campaign.findMany({
     where: {
       status: "ACTIVE",
+      company: { status: "ACTIVE" },
       campaignAffiliates: { none: { affiliateProfileId } },
     },
     include: { company: { select: { name: true } }, rewardRules: true },
