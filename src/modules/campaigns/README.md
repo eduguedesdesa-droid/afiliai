@@ -2,9 +2,11 @@
 
 CRUD de campanhas, regras de recompensa (reward rules), produtos vinculados.
 
-**Status:** ainda não implementado — planejado para a Fase 1/2 do plano de implementação.
+**Status:** implementado (Fase 1) — criar campanha, mudar status
+(rascunho → ativa → pausada/encerrada) e definir a regra de recompensa
+(percentual ou valor fixo) em `actions.ts`. UI em `/empresa/campanhas`.
 
-Ao implementar, seguir a convenção dos demais módulos: `service.ts` (regra de
-negócio), `repository.ts` (acesso a dado via Prisma), `schema.ts` (validação
-Zod dos inputs), `types.ts`. Nenhuma lógica de negócio deve viver em
-componentes React ou route handlers — sempre chamando uma função daqui.
+Ainda não implementado: vínculo de produtos específicos (hoje toda campanha
+vale para todos os produtos), múltiplas regras de recompensa por campanha
+(tiers/condições — o schema já suporta via `RewardRule.config`), edição dos
+demais campos após a criação.

@@ -2,9 +2,13 @@
 
 Convite e cadastro de afiliados numa empresa, elegibilidade em campanhas.
 
-**Status:** ainda não implementado — planejado para a Fase 1 do plano de implementação.
+**Status:** parcialmente implementado (Fase 1) — fluxo de autoatendimento:
+o afiliado solicita participação numa campanha ativa
+(`requestToJoinCampaign`) e a empresa aprova ou rejeita
+(`respondToJoinRequest`, em `actions.ts`), que dispara a geração de
+cupom/link (ver módulo `tracking`). UI em `/afiliado/campanhas-disponiveis`,
+`/afiliado/minhas-campanhas` e `/empresa/afiliados`.
 
-Ao implementar, seguir a convenção dos demais módulos: `service.ts` (regra de
-negócio), `repository.ts` (acesso a dado via Prisma), `schema.ts` (validação
-Zod dos inputs), `types.ts`. Nenhuma lógica de negócio deve viver em
-componentes React ou route handlers — sempre chamando uma função daqui.
+Ainda não implementado: convite direto pela empresa (buscar um afiliado
+existente por e-mail e adicioná-lo a uma campanha sem que ele solicite) e
+convite de alguém que ainda não tem conta na plataforma.

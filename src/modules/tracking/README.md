@@ -1,10 +1,14 @@
 # Módulo: Tracking
 
-Links rastreáveis, cupons, cliques, sessões de atribuição e os resolvers de atribuição (cupom, link, link+cupom, lead).
+Links rastreáveis, cupons, cliques, sessões de atribuição e os resolvers de
+atribuição (cupom, link, link+cupom, lead).
 
-**Status:** ainda não implementado — planejado para a Fase 2 do plano de implementação.
+**Status:** parcialmente implementado — `service.ts` gera o código único de
+cupom/link quando um afiliado é aprovado numa campanha (chamado a partir do
+módulo `affiliates`).
 
-Ao implementar, seguir a convenção dos demais módulos: `service.ts` (regra de
-negócio), `repository.ts` (acesso a dado via Prisma), `schema.ts` (validação
-Zod dos inputs), `types.ts`. Nenhuma lógica de negócio deve viver em
-componentes React ou route handlers — sempre chamando uma função daqui.
+Ainda não implementado (Fase 2): o endpoint público `/r/[code]` de
+redirecionamento, captura de clique (`Click`), criação de `TrackingSession`
+por visitante/cookie, aplicação de cupom em checkout, captura de lead via
+formulário público, e os resolvers de atribuição que ligam uma venda de
+volta ao afiliado certo dentro da janela de atribuição da campanha.
