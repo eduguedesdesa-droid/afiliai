@@ -1,0 +1,677 @@
+// AFILIAI — schema principal do banco de dados
+// Convenções:
+// - Todo valor monetário é armazenado em CENTAVOS (BigInt), nunca float.
+// - Toda tabela "tenant-scoped" carrega companyId para isolamento multi-tenant.
+// - Ids são uuid v7 (ordenáveis por tempo de criação), bons para índices em tabelas de alto volume (clicks).
+// - Enums cobrem os valores conhecidos hoje; tipos "CUSTOM"/config em Json permitem extensão sem migration.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================================
+// IDENTIDADE E PAPÉIS
+// ============================================================================
+// Um usuário é uma identidade única (login). Os papéis que ele exerce (admin da
+// plataforma, membro de uma ou mais empresas, afiliado) vivem em UserRole, o que
+// permite que a mesma pessoa acumule múltiplos papéis — inclusive em empresas
+// diferentes — sem qualquer mudança de schema no futuro.
+
+model User {
+  id              String     @id @default(uuid(7))
+  email           String     @unique
+  passwordHash    String
+  name            String
+  phone           String?
+  status          UserStatus @default(ACTIVE)
+  emailVerifiedAt DateTime?
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  roles                   UserRole[]
+  affiliateProfile        AffiliateProfile?
+  sessions                Session[]
+  passwordResetTokens     PasswordResetToken[]
+  companyMemberships      CompanyMember[]
+  auditLogs               AuditLog[]
+  commissionStatusChanges CommissionStatusHistory[]
+
+  @@map("users")
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+model UserRole {
+  id        String       @id @default(uuid(7))
+  userId    String
+  role      PlatformRole
+  companyId String?
+  createdAt DateTime     @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role, companyId])
+  @@index([companyId])
+  @@map("user_roles")
+}
+
+/// PLATFORM_ADMIN e AFFILIATE não têm empresa associada (companyId nulo) —
+/// são papéis globais. COMPANY_MEMBER sempre tem companyId preenchido.
+enum PlatformRole {
+  PLATFORM_ADMIN
+  COMPANY_MEMBER
+  AFFILIATE
+}
+
+// ============================================================================
+// EMPRESA (TENANT)
+// ============================================================================
+
+model Company {
+  id        String        @id @default(uuid(7))
+  name      String
+  slug      String        @unique
+  document  String? // CNPJ/CPF
+  segment   String? // vertical: varejo físico, e-commerce, serviços...
+  status    CompanyStatus @default(ACTIVE)
+  plan      String        @default("trial")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  userRoles        UserRole[]
+  members          CompanyMember[]
+  campaigns        Campaign[]
+  products         Product[]
+  leads            Lead[]
+  customers        Customer[]
+  sales            Sale[]
+  trackingSessions TrackingSession[]
+  payouts          Payout[]
+  auditLogs        AuditLog[]
+
+  @@map("companies")
+}
+
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
+  CHURNED
+}
+
+model CompanyMember {
+  id        String              @id @default(uuid(7))
+  companyId String
+  userId    String
+  role      CompanyMemberRole   @default(MEMBER)
+  status    CompanyMemberStatus @default(ACTIVE)
+  invitedAt DateTime?
+  joinedAt  DateTime?
+  createdAt DateTime            @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId])
+  @@index([userId])
+  @@map("company_members")
+}
+
+enum CompanyMemberRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum CompanyMemberStatus {
+  INVITED
+  ACTIVE
+  REMOVED
+}
+
+// ============================================================================
+// AFILIADO (IDENTIDADE GLOBAL — atravessa empresas, base do futuro marketplace
+// e do Afiliai Match)
+// ============================================================================
+
+model AffiliateProfile {
+  id          String                 @id @default(uuid(7))
+  userId      String                 @unique
+  displayName String
+  bio         String?
+  document    String?
+  payoutInfo  Json? // dados de recebimento (chave pix etc.) — considerar criptografia no futuro
+  status      AffiliateProfileStatus @default(ACTIVE)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+
+  user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  characteristics    AffiliateCharacteristics?
+  campaignAffiliates CampaignAffiliate[]
+  leads              Lead[]
+  sales              Sale[]
+  payouts            Payout[]
+
+  @@map("affiliate_profiles")
+}
+
+enum AffiliateProfileStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+/// Campos preparados para o futuro Afiliai Match. Nenhuma lógica de
+/// recomendação é implementada agora — apenas o espaço para os dados.
+model AffiliateCharacteristics {
+  id                       String   @id @default(uuid(7))
+  affiliateProfileId       String   @unique
+  category                 String?
+  niche                    String?
+  country                  String?
+  state                    String?
+  city                     String?
+  audienceSize             Int?
+  ageRange                 String?
+  genderDistribution       Json?
+  reach                    Int?
+  engagementRate           Decimal? @db.Decimal(5, 2)
+  avgTicketCents           BigInt?
+  conversionHistorySummary Json?
+  productCategories        String[]
+  updatedAt                DateTime @updatedAt
+
+  affiliateProfile AffiliateProfile @relation(fields: [affiliateProfileId], references: [id], onDelete: Cascade)
+
+  @@map("affiliate_characteristics")
+}
+
+// ============================================================================
+// PRODUTOS
+// ============================================================================
+
+model Product {
+  id         String   @id @default(uuid(7))
+  companyId  String
+  name       String
+  sku        String?
+  priceCents BigInt?
+  category   String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaignProducts CampaignProduct[]
+
+  @@index([companyId])
+  @@map("products")
+}
+
+// ============================================================================
+// CAMPANHA — unidade central do sistema
+// ============================================================================
+
+model Campaign {
+  id                    String            @id @default(uuid(7))
+  companyId             String
+  name                  String
+  description           String?
+  status                CampaignStatus    @default(DRAFT)
+  attributionMethod     AttributionMethod
+  conversionType        ConversionType    @default(SALE)
+  approvalMode          ApprovalMode      @default(MANUAL)
+  startDate             DateTime?
+  endDate               DateTime?
+  attributionWindowDays Int               @default(30)
+  leadToSaleWindowDays  Int?
+  /// Para onde /r/[code] redireciona quando conversionType=SALE (página do
+  /// produto/checkout da empresa). Se vazio, cai numa página interna de
+  /// fallback (/c/[campaignId]) mostrando o cupom do afiliado, se houver.
+  destinationUrl        String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaignProducts   CampaignProduct[]
+  rewardRules        RewardRule[]
+  campaignAffiliates CampaignAffiliate[]
+  leads              Lead[]
+  sales              Sale[]
+
+  @@index([companyId])
+  @@map("campaigns")
+}
+
+enum CampaignStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+/// Método pelo qual uma conversão é atribuída a um afiliado. Novos métodos
+/// entram aqui + um novo AttributionResolver no código — sem redesenho.
+enum AttributionMethod {
+  COUPON
+  LINK
+  LINK_AND_COUPON
+  LEAD
+}
+
+enum ConversionType {
+  SALE
+  LEAD
+}
+
+enum ApprovalMode {
+  AUTO
+  MANUAL
+}
+
+model CampaignProduct {
+  id           String  @id @default(uuid(7))
+  campaignId   String
+  productId    String?
+  appliesToAll Boolean @default(false)
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  product  Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([campaignId, productId])
+  @@map("campaign_products")
+}
+
+/// Regra de recompensa da campanha. `value` cobre os casos simples
+/// (percentual ou valor fixo); `config` guarda regras específicas por tipo
+/// (faixas/tiers, condições) sem exigir migration para novos tipos.
+model RewardRule {
+  id         String     @id @default(uuid(7))
+  campaignId String
+  rewardType RewardType
+  value      Decimal?   @db.Decimal(12, 4)
+  config     Json?
+  priority   Int        @default(0)
+  active     Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+
+  campaign    Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  commissions Commission[]
+
+  @@index([campaignId])
+  @@map("reward_rules")
+}
+
+enum RewardType {
+  PERCENTAGE
+  FIXED
+  CASHBACK
+  STORE_CREDIT
+  DISCOUNT
+  POINTS
+  CUSTOM
+}
+
+/// Elegibilidade/participação de um afiliado numa campanha específica.
+model CampaignAffiliate {
+  id                 String                  @id @default(uuid(7))
+  campaignId         String
+  affiliateProfileId String
+  status             CampaignAffiliateStatus @default(PENDING_APPROVAL)
+  joinedAt           DateTime?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  campaign         Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  affiliateProfile AffiliateProfile @relation(fields: [affiliateProfileId], references: [id], onDelete: Cascade)
+  affiliateLinks   AffiliateLink[]
+  coupons          Coupon[]
+  commissions      Commission[]
+
+  @@unique([campaignId, affiliateProfileId])
+  @@index([affiliateProfileId])
+  @@map("campaign_affiliates")
+}
+
+enum CampaignAffiliateStatus {
+  INVITED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  REMOVED
+}
+
+// ============================================================================
+// TRACKING — links, cupons, sessões, cliques
+// ============================================================================
+
+model AffiliateLink {
+  id                  String   @id @default(uuid(7))
+  campaignAffiliateId String
+  code                String   @unique
+  destinationUrl      String?
+  clicksCount         Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  campaignAffiliate CampaignAffiliate @relation(fields: [campaignAffiliateId], references: [id], onDelete: Cascade)
+  clicks            Click[]
+  trackingSessions  TrackingSession[]
+  sales             Sale[]
+
+  @@map("affiliate_links")
+}
+
+model Coupon {
+  id                  String   @id @default(uuid(7))
+  campaignAffiliateId String
+  code                String   @unique
+  active              Boolean  @default(true)
+  usageLimit          Int?
+  usedCount           Int      @default(0)
+  createdAt           DateTime @default(now())
+
+  campaignAffiliate CampaignAffiliate @relation(fields: [campaignAffiliateId], references: [id], onDelete: Cascade)
+  trackingSessions  TrackingSession[]
+  sales             Sale[]
+
+  @@map("coupons")
+}
+
+/// Sessão de atribuição de um visitante (cookie), usada para ligar um clique
+/// ou cupom a um lead ou venda posterior dentro da janela de atribuição.
+/// Uma sessão por (empresa, visitante): last-click dentro da empresa —
+/// o clique mais recente sobrescreve affiliateLinkId/expiresAt.
+model TrackingSession {
+  id              String   @id @default(uuid(7))
+  companyId       String
+  visitorId       String
+  affiliateLinkId String?
+  couponId        String?
+  firstTouchAt    DateTime @default(now())
+  lastTouchAt     DateTime @default(now())
+  expiresAt       DateTime
+
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  affiliateLink AffiliateLink? @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
+  coupon        Coupon?        @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  leads         Lead[]
+
+  @@unique([companyId, visitorId])
+  @@index([expiresAt])
+  @@map("tracking_sessions")
+}
+
+/// Tabela de altíssimo volume. Índice por link+data desde já; particionamento
+/// e arquivamento ficam documentados como evolução futura (ver docs/adr).
+model Click {
+  id              String   @id @default(uuid(7))
+  affiliateLinkId String
+  visitorId       String
+  ipHash          String?
+  userAgent       String?
+  referrer        String?
+  utm             Json?
+  createdAt       DateTime @default(now())
+
+  affiliateLink AffiliateLink @relation(fields: [affiliateLinkId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateLinkId, createdAt])
+  @@map("clicks")
+}
+
+// ============================================================================
+// LEADS E CLIENTES
+// ============================================================================
+
+model Lead {
+  id                 String     @id @default(uuid(7))
+  companyId          String
+  campaignId         String
+  affiliateProfileId String?
+  trackingSessionId  String?
+  name               String
+  email              String?
+  phone              String?
+  customFields       Json?
+  status             LeadStatus @default(NEW)
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaign         Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  affiliateProfile AffiliateProfile? @relation(fields: [affiliateProfileId], references: [id], onDelete: SetNull)
+  trackingSession  TrackingSession?  @relation(fields: [trackingSessionId], references: [id], onDelete: SetNull)
+  sales            Sale[]
+
+  @@index([companyId])
+  @@index([campaignId])
+  @@map("leads")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  LOST
+}
+
+model Customer {
+  id          String   @id @default(uuid(7))
+  companyId   String
+  externalRef String?
+  name        String?
+  email       String?
+  phone       String?
+  createdAt   DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sales   Sale[]
+
+  @@index([companyId])
+  @@map("customers")
+}
+
+// ============================================================================
+// VENDAS (CONVERSÃO) E COMISSÕES
+// ============================================================================
+
+/// Toda conversão (venda) carrega tudo que é necessário para rastreabilidade
+/// completa: empresa, campanha, afiliado, lead/cliente, método de atribuição,
+/// valor e (via Commission) o status financeiro.
+model Sale {
+  id                 String            @id @default(uuid(7))
+  companyId          String
+  campaignId         String
+  affiliateProfileId String
+  leadId             String?
+  customerId         String?
+  couponId           String?
+  affiliateLinkId    String?
+  attributionMethod  AttributionMethod
+  grossAmountCents   BigInt
+  currency           String            @default("BRL")
+  externalOrderId    String? // usado para idempotência (evita comissão duplicada em reprocessamento)
+  status             SaleStatus        @default(PENDING)
+  occurredAt         DateTime          @default(now())
+  confirmedAt        DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  campaign         Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  affiliateProfile AffiliateProfile @relation(fields: [affiliateProfileId], references: [id], onDelete: Restrict)
+  lead             Lead?            @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  customer         Customer?        @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  coupon           Coupon?          @relation(fields: [couponId], references: [id], onDelete: SetNull)
+  affiliateLink    AffiliateLink?   @relation(fields: [affiliateLinkId], references: [id], onDelete: SetNull)
+  commissions      Commission[]
+
+  @@unique([companyId, externalOrderId])
+  @@index([campaignId])
+  @@index([affiliateProfileId])
+  @@map("sales")
+}
+
+enum SaleStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REFUNDED
+}
+
+model Commission {
+  id                  String           @id @default(uuid(7))
+  saleId              String
+  campaignAffiliateId String
+  rewardRuleId        String?
+  amountCents         BigInt
+  type                RewardType
+  status              CommissionStatus @default(PENDING)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  sale              Sale                      @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  campaignAffiliate CampaignAffiliate         @relation(fields: [campaignAffiliateId], references: [id], onDelete: Cascade)
+  rewardRule        RewardRule?               @relation(fields: [rewardRuleId], references: [id], onDelete: SetNull)
+  statusHistory     CommissionStatusHistory[]
+  payoutItems       PayoutItem[]
+
+  @@index([saleId])
+  @@index([campaignAffiliateId])
+  @@map("commissions")
+}
+
+enum CommissionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+  CANCELLED
+}
+
+/// Histórico imutável de toda transição de status de comissão. Nunca é
+/// atualizado — apenas inserido — pelo serviço central de comissões.
+model CommissionStatusHistory {
+  id              String            @id @default(uuid(7))
+  commissionId    String
+  fromStatus      CommissionStatus?
+  toStatus        CommissionStatus
+  changedByUserId String?
+  reason          String?
+  createdAt       DateTime          @default(now())
+
+  commission Commission @relation(fields: [commissionId], references: [id], onDelete: Cascade)
+  changedBy  User?      @relation(fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([commissionId])
+  @@map("commission_status_history")
+}
+
+// ============================================================================
+// PAGAMENTOS (AGRUPAMENTO DE COMISSÕES)
+// ============================================================================
+
+model Payout {
+  id                 String       @id @default(uuid(7))
+  companyId          String
+  affiliateProfileId String
+  periodStart        DateTime?
+  periodEnd          DateTime?
+  totalAmountCents   BigInt
+  status             PayoutStatus @default(PENDING)
+  paidAt             DateTime?
+  createdAt          DateTime     @default(now())
+
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  affiliateProfile AffiliateProfile @relation(fields: [affiliateProfileId], references: [id], onDelete: Cascade)
+  items            PayoutItem[]
+
+  @@index([companyId])
+  @@index([affiliateProfileId])
+  @@map("payouts")
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+model PayoutItem {
+  id           String @id @default(uuid(7))
+  payoutId     String
+  commissionId String
+
+  payout     Payout     @relation(fields: [payoutId], references: [id], onDelete: Cascade)
+  commission Commission @relation(fields: [commissionId], references: [id], onDelete: Restrict)
+
+  @@unique([payoutId, commissionId])
+  @@map("payout_items")
+}
+
+// ============================================================================
+// AUDITORIA
+// ============================================================================
+
+model AuditLog {
+  id         String   @id @default(uuid(7))
+  companyId  String?
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  company Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([userId])
+  @@map("audit_logs")
+}
+
+// ============================================================================
+// AUTENTICAÇÃO — sessão (banco) e recuperação de senha
+// ============================================================================
+
+/// Sessão persistida no banco (além do cookie assinado) para permitir
+/// revogação/expiração ativa — não apenas confiar no JWT até expirar.
+model Session {
+  id        String   @id @default(uuid(7))
+  userId    String
+  userAgent String?
+  ipHash    String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid(7))
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
