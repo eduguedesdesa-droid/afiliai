@@ -1,5 +1,7 @@
 # Afiliai
 
+[![CI](https://github.com/eduguedesdesa-droid/afiliai/actions/workflows/ci.yml/badge.svg)](https://github.com/eduguedesdesa-droid/afiliai/actions/workflows/ci.yml)
+
 Plataforma SaaS de marketing de indicação e afiliados para empresas —
 campanhas, cupons, links rastreáveis, leads, vendas e comissões, com
 multi-tenancy real e suporte a múltiplos papéis por usuário.
@@ -144,6 +146,16 @@ Todas com a senha `Senha123!`:
 
 Esse cenário reproduz o exemplo usado na definição do produto: 10 vendas,
 R$5.000 em receita, 10% de comissão, R$500 gerados para o afiliado.
+
+## CI
+
+`.github/workflows/ci.yml` roda em todo push/PR para `main`: sobe um
+Postgres de serviço, instala as dependências (`pnpm install
+--frozen-lockfile`, que já dispara `postinstall` → `prisma generate`),
+aplica as migrations do zero (`prisma migrate deploy` — pega drift de
+schema sem migration correspondente), roda `pnpm lint` e `pnpm build`
+(que inclui a checagem de tipos do TypeScript). Ainda não roda testes
+automatizados — não existem no projeto ainda.
 
 ## Estrutura de pastas
 

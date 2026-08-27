@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: afiliai
+          POSTGRES_PASSWORD: afiliai_ci
+          POSTGRES_DB: afiliai_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U afiliai"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://afiliai:afiliai_ci@localhost:5432/afiliai_ci?schema=public
+      # Só usado durante o build/CI — nunca a chave real de produção.
+      SESSION_SECRET: ci-only-secret-value-never-used-in-production-32
+      APP_URL: http://localhost:3000
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Instalar dependências
+        run: pnpm install --frozen-lockfile
+
+      - name: Aplicar migrations no banco de CI
+        run: pnpm exec prisma migrate deploy
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build (inclui checagem de tipos)
+        run: pnpm build
