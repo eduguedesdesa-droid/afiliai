@@ -15,6 +15,8 @@ Registro de vendas (conversões), idempotência por pedido externo.
 - `cancelSale`: cancela a venda e propaga o cancelamento para as comissões
   ainda canceláveis (`cancelCommissionsForSale`).
 
+Testado: `createSaleSchema` tem testes unitários (`schemas.test.ts`).
+
 Ainda não implementado: webhook de e-commerce para registrar vendas
 automaticamente (hoje é sempre lançamento manual pela empresa), edição de
 uma venda já registrada.

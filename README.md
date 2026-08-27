@@ -134,6 +134,10 @@ pnpm db:seed      # popula um cenário de demonstração (opcional, mas recomend
 pnpm dev          # http://localhost:3000
 ```
 
+Para rodar os testes de integração (opcional): crie um banco dedicado
+(`createdb afiliai_test`) e aponte `TEST_DATABASE_URL` para ele no `.env` —
+ver seção Testes abaixo.
+
 ### Contas do seed (`pnpm db:seed`)
 
 Todas com a senha `Senha123!`:
@@ -147,15 +151,46 @@ Todas com a senha `Senha123!`:
 Esse cenário reproduz o exemplo usado na definição do produto: 10 vendas,
 R$5.000 em receita, 10% de comissão, R$500 gerados para o afiliado.
 
+## Testes
+
+Duas suítes, com propósitos diferentes:
+
+- **`pnpm test`** — unitários (Vitest), sem banco. Cobre lógica pura:
+  schemas de validação (Zod) de cada módulo, geração de CSV (`src/lib/csv.ts`),
+  slug (`src/lib/slugify.ts`), codificação/decodificação do cookie de sessão
+  (`src/lib/session-token.ts`) e o cálculo de comissão + a máquina de estados
+  de `src/modules/commissions/service.ts` (`computeCommissionAmountCents`,
+  `ALLOWED_TRANSITIONS`). `import "server-only"`/`"client-only"` são
+  resolvidos para um stub vazio via alias em `vitest.config.mts` — esses
+  pacotes não são dependências reais do projeto, só existem como resolução
+  especial do bundler do Next.js (ver `AGENTS.md`).
+- **`pnpm test:integration`** — bate num Postgres de verdade. Cobre os dois
+  motores que fazem sentido só com banco: `src/modules/commissions/service.ts`
+  (criação de comissão por regra/modo de aprovação, transições de status
+  válidas/inválidas, cancelamento em cascata a partir de uma venda) e
+  `src/modules/tracking/service.ts` (registro de clique, contador,
+  last-click, rejeição para afiliado não aprovado ou empresa suspensa,
+  resolução de atribuição respeitando janela/campanha). Cada teste começa
+  truncando todas as tabelas (`src/test/db-reset.ts`) — nunca rodar isso
+  contra o banco de desenvolvimento.
+
+Configure `TEST_DATABASE_URL` no `.env` (ver `.env.example`) apontando para
+um banco **dedicado** (`createdb afiliai_test`, por exemplo) — nunca o mesmo
+do `DATABASE_URL` de desenvolvimento. `pnpm test:integration` aplica as
+migrations nesse banco (`prisma migrate deploy`) antes de rodar.
+
+`pnpm test:all` roda as duas suítes em sequência.
+
 ## CI
 
 `.github/workflows/ci.yml` roda em todo push/PR para `main`: sobe um
 Postgres de serviço, instala as dependências (`pnpm install
 --frozen-lockfile`, que já dispara `postinstall` → `prisma generate`),
 aplica as migrations do zero (`prisma migrate deploy` — pega drift de
-schema sem migration correspondente), roda `pnpm lint` e `pnpm build`
-(que inclui a checagem de tipos do TypeScript). Ainda não roda testes
-automatizados — não existem no projeto ainda.
+schema sem migration correspondente), roda `pnpm lint`, `pnpm build` (que
+inclui a checagem de tipos do TypeScript), `pnpm test` e `pnpm test:integration`
+(reusando o mesmo Postgres de serviço — efêmero por execução, então é seguro
+truncar tabelas nele).
 
 ## Estrutura de pastas
 
@@ -176,7 +211,10 @@ src/
   modules/             # lógica de domínio por área — o que falta implementar
                          está documentado no README.md de cada módulo
   components/          # UI compartilhada
+  test/                # helpers de teste (reset de banco, fixtures) — não é um módulo de domínio
   generated/prisma/    # client do Prisma gerado (não editar à mão)
+scripts/
+  with-test-db.mjs     # roda um comando com DATABASE_URL trocada por TEST_DATABASE_URL
 ```
 
 ## Convenções importantes

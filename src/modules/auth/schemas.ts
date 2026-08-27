@@ -6,26 +6,32 @@ const passwordSchema = z
   .regex(/[a-zA-Z]/, { error: "A senha precisa conter pelo menos uma letra." })
   .regex(/[0-9]/, { error: "A senha precisa conter pelo menos um número." });
 
+// `.trim().toLowerCase()` roda ANTES da checagem de formato (via `.pipe`),
+// não depois: um e-mail colado com espaço nas pontas (comum em copiar/colar)
+// tem que ser normalizado antes de validar, senão a checagem de formato
+// rejeita o espaço e nunca chega a normalizar nada.
+const emailField = z.string().trim().toLowerCase().pipe(z.email({ error: "Informe um e-mail válido." }));
+
 export const signupEmpresaSchema = z.object({
   name: z.string().trim().min(2, { error: "Informe seu nome." }),
-  email: z.email({ error: "Informe um e-mail válido." }).trim().toLowerCase(),
+  email: emailField,
   password: passwordSchema,
   companyName: z.string().trim().min(2, { error: "Informe o nome da empresa." }),
 });
 
 export const signupAfiliadoSchema = z.object({
   name: z.string().trim().min(2, { error: "Informe seu nome." }),
-  email: z.email({ error: "Informe um e-mail válido." }).trim().toLowerCase(),
+  email: emailField,
   password: passwordSchema,
 });
 
 export const loginSchema = z.object({
-  email: z.email({ error: "Informe um e-mail válido." }).trim().toLowerCase(),
+  email: emailField,
   password: z.string().min(1, { error: "Informe sua senha." }),
 });
 
 export const requestPasswordResetSchema = z.object({
-  email: z.email({ error: "Informe um e-mail válido." }).trim().toLowerCase(),
+  email: emailField,
 });
 
 export const resetPasswordSchema = z
