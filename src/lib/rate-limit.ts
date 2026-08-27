@@ -1,4 +1,5 @@
 import "server-only";
+import { env } from "@/lib/env";
 
 /**
  * Rate limit em memória, por processo — janela fixa por chave. Suficiente
@@ -43,6 +44,13 @@ export function checkRateLimit(
   key: string,
   { limit, windowSeconds }: { limit: number; windowSeconds: number }
 ): RateLimitResult {
+  // Só ligado pelo servidor de E2E (playwright.config.ts) — os mesmos
+  // poucos endpoints (login/cadastro) são exercitados dezenas de vezes numa
+  // única execução da suíte, todos "vindos do mesmo IP" (localhost).
+  // NUNCA definir E2E_TESTING fora desse contexto — não é uma env var de
+  // produção.
+  if (env.E2E_TESTING === "1") return { allowed: true, retryAfterSeconds: 0 };
+
   const now = Date.now();
   cleanupExpired(now);
 

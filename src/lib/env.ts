@@ -22,6 +22,11 @@ const envSchema = z.object({
     // entrega para o e-mail da própria conta Resend. Trocar por um remetente
     // do domínio verificado da empresa antes de ir a produção.
     .default("Afiliai <onboarding@resend.dev>"),
+  // Só definida pelo servidor de E2E (playwright.config.ts) — desliga o
+  // rate limit (src/lib/rate-limit.ts), que senão bloquearia a própria
+  // suíte (várias specs fazem login/cadastro do "mesmo IP", localhost).
+  // NUNCA definir isso fora desse contexto.
+  E2E_TESTING: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse({
@@ -31,6 +36,7 @@ const parsed = envSchema.safeParse({
   NODE_ENV: process.env.NODE_ENV,
   RESEND_API_KEY: process.env.RESEND_API_KEY,
   EMAIL_FROM: process.env.EMAIL_FROM,
+  E2E_TESTING: process.env.E2E_TESTING,
 });
 
 if (!parsed.success) {
