@@ -8,7 +8,8 @@ import { hashPassword, verifyPassword } from "@/lib/password";
 import { createSession, destroySession, destroyAllSessionsForUser } from "@/lib/session";
 import { setActiveContext, clearActiveContext, contextToPath, type ActiveContext } from "@/lib/active-context";
 import { uniqueCompanySlug } from "@/lib/slug";
-import { logger } from "@/lib/logger";
+import { sendEmail } from "@/lib/email";
+import { env } from "@/lib/env";
 import {
   signupEmpresaSchema,
   signupAfiliadoSchema,
@@ -16,6 +17,7 @@ import {
   requestPasswordResetSchema,
   resetPasswordSchema,
 } from "@/modules/auth/schemas";
+import { passwordResetEmail } from "@/modules/auth/emails";
 
 export type AuthFormState =
   | {
@@ -222,7 +224,7 @@ export async function requestPasswordReset(
 
   const user = await prisma.user.findUnique({
     where: { email: validated.data.email },
-    select: { id: true },
+    select: { id: true, email: true, name: true },
   });
 
   if (!user) return genericSuccess;
@@ -235,12 +237,12 @@ export async function requestPasswordReset(
     data: { userId: user.id, tokenHash, expiresAt },
   });
 
-  // TODO: integrar um provedor de e-mail transacional (ex.: Resend/SES) e
-  // enviar o link de fato. Por enquanto, registramos no log para uso em dev.
-  logger.info("Link de recuperação de senha gerado (dev only)", {
-    userId: user.id,
-    resetPath: `/redefinir-senha/${rawToken}`,
-  });
+  const resetUrl = new URL(`/redefinir-senha/${rawToken}`, env.APP_URL).toString();
+  const { subject, html, text } = passwordResetEmail(resetUrl);
+  // sendEmail nunca lança e nunca muda a resposta genérica acima — se o
+  // provedor falhar, o pedido continua "bem-sucedido" do ponto de vista do
+  // usuário (ver comentário em src/lib/email.ts).
+  await sendEmail({ to: user.email, subject, html, text });
 
   return genericSuccess;
 }

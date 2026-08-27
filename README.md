@@ -32,7 +32,8 @@ específicas à medida que forem registradas.
   de recompensa, tracking (links, cupons, cliques, sessões), leads, vendas,
   comissões (com histórico de status), pagamentos e auditoria.
 - **Autenticação completa**: cadastro (empresa e afiliado), login, logout,
-  recuperação e redefinição de senha, sessão com cookie assinado + revogação
+  recuperação e redefinição de senha (com e-mail transacional de verdade —
+  ver seção E-mail transacional), sessão com cookie assinado + revogação
   no banco, proteção de rotas via `proxy.ts` (checagem otimista) e via DAL
   (`src/lib/dal.ts`, checagem segura em todo Server Component/Action).
 - **Suporte a múltiplos papéis por usuário**: um usuário pode ser dono de
@@ -151,6 +152,34 @@ Todas com a senha `Senha123!`:
 Esse cenário reproduz o exemplo usado na definição do produto: 10 vendas,
 R$5.000 em receita, 10% de comissão, R$500 gerados para o afiliado.
 
+## E-mail transacional
+
+Todo envio de e-mail passa por `sendEmail` (`src/lib/email.ts`), que fala
+com a [Resend](https://resend.com) (chamada HTTP direta na API deles, sem
+SDK). Hoje o único fluxo que usa isso é a recuperação de senha
+(`requestPasswordReset`, `src/modules/auth/actions.ts`) — um futuro convite
+de membro de empresa ou notificação de comissão chamaria a mesma função.
+
+- **Sem `RESEND_API_KEY` configurada (padrão)**: nada é enviado de verdade —
+  `sendEmail` loga o assunto e o corpo em texto puro (com o link) via
+  `logger.info`, pra dar pra copiar o link e testar o fluxo localmente sem
+  precisar de conta em provedor nenhum.
+- **Com `RESEND_API_KEY` configurada**: envia de verdade. Configure no
+  `.env`:
+  ```
+  RESEND_API_KEY="re_..."
+  EMAIL_FROM="Afiliai <onboarding@resend.dev>"
+  ```
+  O padrão de `EMAIL_FROM` (`onboarding@resend.dev`) é o remetente de teste
+  da própria Resend — funciona sem verificar domínio, mas só entrega para o
+  e-mail da conta Resend usada para gerar a chave. Para enviar a qualquer
+  destinatário, verifique um domínio próprio na Resend e troque `EMAIL_FROM`
+  por um remetente desse domínio.
+- `sendEmail` nunca lança exceção — se o provedor falhar ou estiver mal
+  configurado, o fluxo que chamou continua (ex.: a recuperação de senha
+  sempre responde com sucesso genérico, exista ou não o e-mail, para não
+  vazar quem está cadastrado); a falha só fica registrada no log.
+
 ## Testes
 
 Duas suítes, com propósitos diferentes:
@@ -232,6 +261,6 @@ scripts/
   chama.
 - **`proxy.ts`** faz apenas checagem otimista (cookie, sem banco) para
   redirecionar rápido. A autorização de verdade acontece sempre no DAL.
-- Envio de e-mail (recuperação de senha, convites) ainda não está integrado
-  a um provedor — por enquanto, o link é apenas registrado via `logger.info`
-  em desenvolvimento (ver `TODO` em `src/modules/auth/actions.ts`).
+- **E-mail transacional** passa sempre por `sendEmail` (`src/lib/email.ts`) —
+  nenhum módulo chama um provedor diretamente. Ver seção E-mail transacional
+  abaixo.
