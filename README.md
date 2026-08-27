@@ -4,7 +4,7 @@ Plataforma SaaS de marketing de indicação e afiliados para empresas —
 campanhas, cupons, links rastreáveis, leads, vendas e comissões, com
 multi-tenancy real e suporte a múltiplos papéis por usuário.
 
-Este README documenta o que já está implementado (Fases 0, 1 e 2 do plano de
+Este README documenta o que já está implementado (Fases 0 a 3 do plano de
 implementação) e como rodar o projeto localmente. A arquitetura
 completa (schema de banco, decisões técnicas, riscos, plano de etapas) foi
 discutida e aprovada antes da implementação — ver `docs/adr/` para decisões
@@ -65,15 +65,31 @@ específicas à medida que forem registradas.
 - **Leads** (`/empresa/leads`): lista os leads recebidos com o afiliado
   atribuído (ou "direto", quando não há atribuição) e permite mudar o status
   manualmente.
+- **Vendas e comissões** (`/empresa/vendas`, `/empresa/comissoes`): a empresa
+  registra uma venda manualmente — a atribuição ao afiliado é resolvida pelo
+  método da campanha (código de cupom digitado, afiliado escolhido para
+  campanhas de LINK, ou um lead já atribuído para campanhas de LEAD, que é
+  automaticamente marcado como `CONVERTED`). Cada venda dispara o cálculo da
+  comissão pela regra de recompensa da campanha, com status inicial
+  `PENDING` ou `APPROVED` conforme `Campaign.approvalMode`. A empresa aprova,
+  rejeita, marca como paga ou cancela pela máquina de estados central
+  (`src/modules/commissions/service.ts`), sempre com histórico
+  (`CommissionStatusHistory`). Cancelar uma venda propaga o cancelamento
+  para a comissão. Idempotência por `externalOrderId` evita duplicar uma
+  venda reenviada.
+- **`/afiliado/conversoes`** e **`/afiliado/ganhos`**: o afiliado vê suas
+  vendas atribuídas e o total de comissões por status (pendente, a receber,
+  recebido).
 - **Esqueleto dos módulos de domínio** (`src/modules/*`) prontos para
   receber a lógica de negócio das próximas fases, cada um com um `README.md`
   descrevendo seu escopo e o que falta.
 
-O que **não** está implementado ainda (fases seguintes do plano): registro de
-vendas, motor de atribuição para vendas (o de leads já existe), cálculo de
-comissão, aplicação automática de cupom em checkout externo, relatórios e
-pagamentos. Ver a raiz de cada módulo em `src/modules/` para o escopo
-planejado.
+O que **não** está implementado ainda (fases seguintes do plano): webhook de
+e-commerce para registrar vendas automaticamente (hoje é sempre lançamento
+manual pela empresa), aplicação automática de cupom em checkout externo,
+relatórios exportáveis, pagamentos em lote (payouts) e o painel
+administrativo da plataforma. Ver a raiz de cada módulo em `src/modules/`
+para o escopo planejado.
 
 ## Rodando localmente
 

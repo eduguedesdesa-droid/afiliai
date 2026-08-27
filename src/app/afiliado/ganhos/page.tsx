@@ -1,5 +1,71 @@
-import { EmBreve } from "@/components/dashboard/em-breve";
+import { getCurrentUser } from "@/lib/dal";
+import { prisma } from "@/lib/prisma";
+import { Badge } from "@/components/ui/badge";
+import { formatCentsBRL } from "@/components/dashboard/stat-card";
+import { COMMISSION_STATUS_LABEL, COMMISSION_STATUS_TONE } from "@/modules/commissions/labels";
 
-export default function Page() {
-  return <EmBreve titulo="Ganhos" descricao="Acompanhe suas comissões por status e histórico de pagamento." />;
+export default async function GanhosPage() {
+  const user = await getCurrentUser();
+  const affiliateProfileId = user.affiliateProfile?.id ?? "";
+
+  const commissions = await prisma.commission.findMany({
+    where: { campaignAffiliate: { affiliateProfileId } },
+    include: {
+      campaignAffiliate: { include: { campaign: { select: { name: true } } } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  const totals = commissions.reduce(
+    (acc, c) => {
+      if (c.status === "PENDING") acc.pending += c.amountCents;
+      if (c.status === "APPROVED") acc.approved += c.amountCents;
+      if (c.status === "PAID") acc.paid += c.amountCents;
+      return acc;
+    },
+    { pending: 0n, approved: 0n, paid: 0n }
+  );
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">Ganhos</h1>
+        <p className="mt-1 text-sm text-zinc-500">Suas comissões por status.</p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-sm text-zinc-500">Pendentes</p>
+          <p className="mt-1 text-xl font-semibold text-zinc-950 dark:text-zinc-50">{formatCentsBRL(totals.pending)}</p>
+        </div>
+        <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-sm text-zinc-500">Aprovadas (a receber)</p>
+          <p className="mt-1 text-xl font-semibold text-zinc-950 dark:text-zinc-50">{formatCentsBRL(totals.approved)}</p>
+        </div>
+        <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <p className="text-sm text-zinc-500">Recebidas</p>
+          <p className="mt-1 text-xl font-semibold text-zinc-950 dark:text-zinc-50">{formatCentsBRL(totals.paid)}</p>
+        </div>
+      </div>
+
+      {commissions.length === 0 ? (
+        <p className="text-sm text-zinc-500">Nenhuma comissão ainda.</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {commissions.map((commission) => (
+            <div
+              key={commission.id}
+              className="flex items-center justify-between rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950"
+            >
+              <div>
+                <p className="font-medium text-zinc-950 dark:text-zinc-50">{formatCentsBRL(commission.amountCents)}</p>
+                <p className="mt-0.5 text-xs text-zinc-500">{commission.campaignAffiliate.campaign.name}</p>
+              </div>
+              <Badge tone={COMMISSION_STATUS_TONE[commission.status]}>{COMMISSION_STATUS_LABEL[commission.status]}</Badge>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
