@@ -180,6 +180,33 @@ de membro de empresa ou notificação de comissão chamaria a mesma função.
   sempre responde com sucesso genérico, exista ou não o e-mail, para não
   vazar quem está cadastrado); a falha só fica registrada no log.
 
+## Segurança
+
+Revisão de segurança feita antes de abrir a plataforma para clientes piloto
+(auditoria de `src/lib/dal.ts`, todo `src/modules/*/actions.ts`, as rotas
+públicas `/r/[code]` e `/c/[campaignId]`, sessão e senha) — nenhuma
+vulnerabilidade de autorização entre empresas (IDOR), injeção de SQL ou
+bypass de autenticação encontrada. Todo Server Action que muta um recurso
+por id primeiro confere posse (`where: { id, companyId: context.companyId }`
+ou equivalente) antes de agir — nunca confia só no id vindo do formulário.
+
+Dois reforços feitos nessa revisão:
+
+- **Rate limit** (`src/lib/rate-limit.ts`) nos endpoints públicos de auth —
+  login (por IP e por e-mail), cadastro (por IP), pedido e confirmação de
+  redefinição de senha (por IP, e por e-mail no pedido). Em memória, por
+  processo — suficiente para um único servidor Node (`next start`), mas
+  **não** funciona corretamente atrás de múltiplas instâncias/funções
+  serverless (cada uma tem sua própria memória). Antes de um deploy assim
+  (ex.: Vercel com múltiplas regiões), trocar o armazenamento por um store
+  compartilhado (ex.: Upstash Redis), mantendo a mesma assinatura de
+  `checkRateLimit`.
+- **Login com tempo de resposta constante**: `login` sempre roda a
+  comparação bcrypt (contra um hash fixo quando o e-mail não existe) antes
+  de responder — sem isso, a ausência desse cálculo é rápida o suficiente
+  para virar um oráculo de tempo que descobre e-mails cadastrados mesmo com
+  a mensagem de erro genérica.
+
 ## Testes
 
 Duas suítes, com propósitos diferentes:

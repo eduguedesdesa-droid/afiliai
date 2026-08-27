@@ -10,6 +10,8 @@ import { setActiveContext, clearActiveContext, contextToPath, type ActiveContext
 import { uniqueCompanySlug } from "@/lib/slug";
 import { sendEmail } from "@/lib/email";
 import { env } from "@/lib/env";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { getClientIp } from "@/lib/request-ip";
 import {
   signupEmpresaSchema,
   signupAfiliadoSchema,
@@ -25,6 +27,29 @@ export type AuthFormState =
       message?: string;
     }
   | undefined;
+
+const RATE_LIMITED: AuthFormState = {
+  message: "Muitas tentativas. Aguarde alguns minutos e tente de novo.",
+};
+
+/**
+ * Hash bcrypt fixo de uma senha arbitrária (não é a senha/hash de ninguém) —
+ * usado só para gastar o mesmo tempo de CPU que uma comparação de senha
+ * real quando o e-mail não existe em `login`, evitando que a diferença de
+ * tempo de resposta vire um oráculo pra descobrir e-mails cadastrados.
+ */
+const DUMMY_PASSWORD_HASH = "$2b$12$6HtLESU0ZuRkvEM4yt8Sv.9CgeURw5hx91PhuUiWMFF.e4nCRovUi";
+
+// Limites de rate limit (src/lib/rate-limit.ts) para os endpoints públicos
+// de auth. Por IP protege contra um único atacante martelando muitas contas;
+// por e-mail protege uma conta específica contra tentativas vindas de IPs
+// diferentes (ex.: botnet).
+const SIGNUP_IP_LIMIT = { limit: 5, windowSeconds: 60 * 60 }; // 5/hora
+const LOGIN_IP_LIMIT = { limit: 10, windowSeconds: 15 * 60 }; // 10/15min
+const LOGIN_EMAIL_LIMIT = { limit: 5, windowSeconds: 15 * 60 }; // 5/15min
+const PASSWORD_RESET_REQUEST_IP_LIMIT = { limit: 5, windowSeconds: 60 * 60 }; // 5/hora
+const PASSWORD_RESET_REQUEST_EMAIL_LIMIT = { limit: 3, windowSeconds: 60 * 60 }; // 3/hora
+const PASSWORD_RESET_CONFIRM_IP_LIMIT = { limit: 10, windowSeconds: 15 * 60 }; // 10/15min
 
 async function currentUserAgent() {
   const h = await headers();
@@ -58,6 +83,9 @@ async function establishSessionAndRedirect(userId: string) {
 }
 
 export async function signupEmpresa(_prevState: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const ip = await getClientIp();
+  if (!checkRateLimit(`signup:ip:${ip}`, SIGNUP_IP_LIMIT).allowed) return RATE_LIMITED;
+
   const validated = signupEmpresaSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -121,6 +149,9 @@ export async function signupEmpresa(_prevState: AuthFormState, formData: FormDat
 }
 
 export async function signupAfiliado(_prevState: AuthFormState, formData: FormData): Promise<AuthFormState> {
+  const ip = await getClientIp();
+  if (!checkRateLimit(`signup:ip:${ip}`, SIGNUP_IP_LIMIT).allowed) return RATE_LIMITED;
+
   const validated = signupAfiliadoSchema.safeParse({
     name: formData.get("name"),
     email: formData.get("email"),
@@ -176,6 +207,14 @@ export async function login(_prevState: AuthFormState, formData: FormData): Prom
 
   const { email, password } = validated.data;
 
+  const ip = await getClientIp();
+  if (
+    !checkRateLimit(`login:ip:${ip}`, LOGIN_IP_LIMIT).allowed ||
+    !checkRateLimit(`login:email:${email}`, LOGIN_EMAIL_LIMIT).allowed
+  ) {
+    return RATE_LIMITED;
+  }
+
   const user = await prisma.user.findUnique({
     where: { email },
     select: { id: true, passwordHash: true, status: true },
@@ -184,10 +223,12 @@ export async function login(_prevState: AuthFormState, formData: FormData): Prom
   // Mensagem genérica de propósito: não revelar se o e-mail existe ou não.
   const invalidCredentials: AuthFormState = { message: "E-mail ou senha inválidos." };
 
-  if (!user) return invalidCredentials;
-
-  const passwordOk = await verifyPassword(password, user.passwordHash);
-  if (!passwordOk) return invalidCredentials;
+  // Sempre roda a comparação bcrypt (contra um hash fixo quando o e-mail não
+  // existe) para que os dois caminhos gastem tempo parecido — sem isso, a
+  // diferença de tempo de resposta vira um oráculo pra descobrir e-mails
+  // cadastrados mesmo com a mensagem de erro genérica.
+  const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_PASSWORD_HASH);
+  if (!user || !passwordOk) return invalidCredentials;
 
   if (user.status !== "ACTIVE") {
     return { message: "Esta conta está suspensa. Entre em contato com o suporte." };
@@ -216,6 +257,17 @@ export async function requestPasswordReset(
 
   if (!validated.success) {
     return { errors: validated.error.flatten().fieldErrors };
+  }
+
+  // Checado ANTES de saber se o e-mail existe (e com o mesmo resultado nos
+  // dois casos) — senão o rate limit por e-mail viraria um jeito de
+  // descobrir e-mails cadastrados (só uma conta real "esgotaria" o limite).
+  const ip = await getClientIp();
+  if (
+    !checkRateLimit(`pwreset:ip:${ip}`, PASSWORD_RESET_REQUEST_IP_LIMIT).allowed ||
+    !checkRateLimit(`pwreset:email:${validated.data.email}`, PASSWORD_RESET_REQUEST_EMAIL_LIMIT).allowed
+  ) {
+    return RATE_LIMITED;
   }
 
   const genericSuccess: AuthFormState = {
@@ -256,6 +308,11 @@ export async function resetPassword(_prevState: AuthFormState, formData: FormDat
 
   if (!validated.success) {
     return { errors: validated.error.flatten().fieldErrors };
+  }
+
+  const ip = await getClientIp();
+  if (!checkRateLimit(`pwreset-confirm:ip:${ip}`, PASSWORD_RESET_CONFIRM_IP_LIMIT).allowed) {
+    return RATE_LIMITED;
   }
 
   const { token, password } = validated.data;
