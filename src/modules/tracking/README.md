@@ -22,6 +22,12 @@ atribuição (cupom, link, link+cupom, lead).
   afiliado recebe o crédito, validando que a sessão não expirou e que
   aponta para a mesma campanha.
 
+Testado: `registerClickAndAttribute` e `resolveAttributionForVisitor` têm
+testes de integração contra Postgres real (`service.integration.test.ts`) —
+clique/contador/last-click, rejeição para afiliado não aprovado ou empresa
+suspensa, expiração e campanha errada na resolução de atribuição. Ver
+README.md da raiz, seção Testes.
+
 Ainda não implementado: aplicação automática de cupom em checkout externo
 (depende de integração com a loja/e-commerce da empresa — fora do escopo até
 haver um alvo de integração real), detecção de fraude/cliques abusivos.

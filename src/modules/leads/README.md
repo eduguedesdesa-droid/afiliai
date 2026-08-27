@@ -14,6 +14,8 @@ Captura de leads via formulário de campanha e atribuição ao afiliado.
 - `updateLeadStatus`: transição manual de status (NEW → CONTACTED →
   QUALIFIED → LOST) pela empresa, em `/empresa/leads`.
 
+Testado: `submitLeadSchema` tem testes unitários (`schemas.test.ts`).
+
 Ainda não implementado: conversão de lead em venda (`status=CONVERTED` é
 setado pela Fase 3, ao registrar a venda vinculada ao lead), campos
 customizados por campanha (`Lead.customFields` já existe no schema).

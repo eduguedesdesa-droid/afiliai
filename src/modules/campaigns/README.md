@@ -6,6 +6,9 @@ CRUD de campanhas, regras de recompensa (reward rules), produtos vinculados.
 (rascunho → ativa → pausada/encerrada) e definir a regra de recompensa
 (percentual ou valor fixo) em `actions.ts`. UI em `/empresa/campanhas`.
 
+Testado: `createCampaignSchema`, `destinationUrlSchema` e `rewardRuleSchema`
+têm testes unitários (`schemas.test.ts`).
+
 Ainda não implementado: vínculo de produtos específicos (hoje toda campanha
 vale para todos os produtos), múltiplas regras de recompensa por campanha
 (tiers/condições — o schema já suporta via `RewardRule.config`), edição dos

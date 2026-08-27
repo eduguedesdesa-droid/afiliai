@@ -13,7 +13,7 @@ import type { CommissionStatus, RewardType } from "@/generated/prisma/enums";
  * schema): PERCENTAGE é um percentual do valor bruto da venda; FIXED é um
  * valor fixo em reais, independente do valor da venda.
  */
-function computeCommissionAmountCents(
+export function computeCommissionAmountCents(
   rewardType: RewardType,
   value: unknown,
   grossAmountCents: bigint
@@ -79,8 +79,11 @@ export async function createCommissionForSale(input: CreateCommissionInput) {
 }
 
 /** Único lugar do sistema que decide quais transições de status são permitidas. */
-const ALLOWED_TRANSITIONS: Record<CommissionStatus, CommissionStatus[]> = {
-  PENDING: ["APPROVED", "REJECTED"],
+export const ALLOWED_TRANSITIONS: Record<CommissionStatus, CommissionStatus[]> = {
+  // PENDING -> CANCELLED existe para `cancelCommissionsForSale`: uma venda
+  // pode ser cancelada antes que a empresa chegue a aprovar/rejeitar a
+  // comissão gerada por ela.
+  PENDING: ["APPROVED", "REJECTED", "CANCELLED"],
   APPROVED: ["PAID", "CANCELLED"],
   REJECTED: [],
   PAID: [],

@@ -11,7 +11,11 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test": "vitest run --config vitest.config.mts",
+    "test:watch": "vitest --config vitest.config.mts",
+    "test:integration": "node scripts/with-test-db.mjs \"pnpm exec prisma migrate deploy && pnpm exec vitest run --config vitest.integration.config.mts\"",
+    "test:all": "pnpm test && pnpm test:integration"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",
@@ -36,7 +40,8 @@
     "prisma": "7.10.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@10.33.0"
 }
