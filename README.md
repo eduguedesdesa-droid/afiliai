@@ -4,7 +4,7 @@ Plataforma SaaS de marketing de indicação e afiliados para empresas —
 campanhas, cupons, links rastreáveis, leads, vendas e comissões, com
 multi-tenancy real e suporte a múltiplos papéis por usuário.
 
-Este README documenta o que já está implementado (Fases 0 a 3 do plano de
+Este README documenta o que já está implementado (Fases 0 a 5 do plano de
 implementação) e como rodar o projeto localmente. A arquitetura
 completa (schema de banco, decisões técnicas, riscos, plano de etapas) foi
 discutida e aprovada antes da implementação — ver `docs/adr/` para decisões
@@ -78,18 +78,27 @@ específicas à medida que forem registradas.
   para a comissão. Idempotência por `externalOrderId` evita duplicar uma
   venda reenviada.
 - **`/afiliado/conversoes`** e **`/afiliado/ganhos`**: o afiliado vê suas
-  vendas atribuídas e o total de comissões por status (pendente, a receber,
-  recebido).
+  vendas atribuídas, o total de comissões por status (pendente, a receber,
+  recebido) e o histórico de pagamentos já recebidos.
+- **Relatórios** (`/empresa/relatorios`): exportação em CSV de campanhas,
+  afiliados (com cliques, comissão gerada e paga), vendas e comissões.
+- **Pagamentos** (`/empresa/payouts`): a empresa agrupa comissões `APROVADAS`
+  de um afiliado — ainda não incluídas em nenhum outro lote — num pagamento;
+  marcar o lote como pago transiciona todas as comissões incluídas para
+  `PAID` de uma vez, pela mesma máquina de estados central da Fase 3. A
+  marcação individual de uma comissão (Fase 3) continua funcionando em
+  paralelo, para pagamentos avulsos.
 - **Esqueleto dos módulos de domínio** (`src/modules/*`) prontos para
   receber a lógica de negócio das próximas fases, cada um com um `README.md`
   descrevendo seu escopo e o que falta.
 
-O que **não** está implementado ainda (fases seguintes do plano): webhook de
-e-commerce para registrar vendas automaticamente (hoje é sempre lançamento
-manual pela empresa), aplicação automática de cupom em checkout externo,
-relatórios exportáveis, pagamentos em lote (payouts) e o painel
-administrativo da plataforma. Ver a raiz de cada módulo em `src/modules/`
-para o escopo planejado.
+O que **não** está implementado ainda: webhook de e-commerce para registrar
+vendas automaticamente (hoje é sempre lançamento manual pela empresa),
+aplicação automática de cupom em checkout externo, integração com um
+provedor de pagamento real (hoje "pago" é sempre uma marcação manual), e o
+painel administrativo da plataforma (`/admin/empresas` e `/admin/usuarios`
+ainda são placeholder — só o dashboard do admin é real). Ver a raiz de cada
+módulo em `src/modules/` para o escopo planejado.
 
 ## Rodando localmente
 
@@ -143,8 +152,8 @@ src/
     r/[code]/           # redirecionamento público rastreável (route handler)
     c/[campaignId]/     # página pública de campanha (lead ou fallback de cupom)
   lib/                 # env, prisma client, sessão, DAL, contexto ativo
-  modules/             # lógica de domínio por área (auth implementado; os
-                         demais são esqueleto para as próximas fases)
+  modules/             # lógica de domínio por área — o que falta implementar
+                         está documentado no README.md de cada módulo
   components/          # UI compartilhada
   generated/prisma/    # client do Prisma gerado (não editar à mão)
 ```
@@ -155,8 +164,13 @@ src/
 - **Toda tabela "tenant-scoped" carrega `companyId`** — nenhuma query deve
   omitir esse filtro. `src/lib/dal.ts` centraliza a checagem de sessão e
   papel para reduzir o risco de esquecer isso numa rota nova.
-- **Nenhuma lógica de negócio em componente React ou route handler** — vive
-  em `src/modules/<área>/service.ts`, chamada a partir da UI.
+- **Nenhuma lógica de negócio em componente React** — vive em
+  `src/modules/<área>/actions.ts` (Server Actions, o ponto de entrada
+  autorizado — sempre confere sessão/posse antes de agir) ou, quando é
+  chamada internamente por mais de um módulo (ex.: `tracking`,
+  `commissions`), em `service.ts` sem `"use server"` nem checagem de
+  autorização própria — a autorização é sempre responsabilidade de quem
+  chama.
 - **`proxy.ts`** faz apenas checagem otimista (cookie, sem banco) para
   redirecionar rápido. A autorização de verdade acontece sempre no DAL.
 - Envio de e-mail (recuperação de senha, convites) ainda não está integrado
