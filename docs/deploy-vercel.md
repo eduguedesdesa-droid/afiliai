@@ -1,23 +1,35 @@
 # Deploy na Vercel — checklist
 
-Guia para o primeiro deploy em produção. Assume que você já decidiu usar a
-Vercel para hospedar o app — o banco pode ser Vercel Postgres (Neon por
-baixo) ou qualquer Postgres gerenciado (Neon, Supabase, RDS...) com uma
-connection string comum, já que o projeto usa `pg` + `@prisma/adapter-pg`
-diretamente, não um driver específico de um provedor.
+Guia para o primeiro deploy em produção. Vercel para hospedar o app +
+Supabase para o banco (Postgres) — o projeto usa `pg` + `@prisma/adapter-pg`
+diretamente, sem driver específico de um provedor, então qualquer Postgres
+gerenciado funcionaria, mas o resto deste guia já vem com os detalhes
+específicos do Supabase resolvidos.
 
-## 1. Banco de dados
+## 1. Banco de dados (Supabase)
 
-- [ ] Criar o banco de produção (Vercel Postgres, Neon, Supabase — qualquer
-      um serve).
-- [ ] **Usar a connection string com pooling** (PgBouncer/pooler), não a
-      direta. Funções serverless da Vercel podem escalar para muitas
-      instâncias simultâneas — cada uma abre sua própria conexão via
-      `src/lib/prisma.ts`, e sem pooling isso esgota o limite de conexões
-      do Postgres rápido. Neon e Supabase expõem uma connection string de
-      pooler pronta (geralmente com `-pooler` no host, ou porta 6543 em vez
-      de 5432) — use essa como `DATABASE_URL`.
-- [ ] Guardar a connection string para o passo 3.
+- [ ] Criar um projeto no [Supabase](https://supabase.com) (se ainda não
+      tiver).
+- [ ] Em Project Settings → Database → Connection string, o Supabase
+      oferece **três** connection strings — guardar as duas primeiras
+      (a terceira raramente é necessária aqui):
+  - **Transaction pooler** (porta 6543) — vai virar `DATABASE_URL` no
+    passo 3, é a que o app usa em produção.
+  - **Direct connection** (porta 5432, host `db.<ref>.supabase.co`, sem
+    passar pelo pooler) — usada só nos passos 4 e 5 abaixo, nunca pelo app
+    rodando.
+- [ ] O painel do Supabase costuma sugerir adicionar `?pgbouncer=true` no
+  fim da connection string da pooler — esse parâmetro é pro motor de query
+  clássico do Prisma (que cacheia prepared statements nomeados, incompatível
+  com o modo *transaction* do PgBouncer). **Não é necessário aqui**: o
+  projeto usa `@prisma/adapter-pg` (`src/lib/prisma.ts`), que por padrão
+  **não** cacheia prepared statements nomeados (confirmado no próprio pacote
+  — só cacheia se você passar um `statementNameGenerator`, o que este
+  projeto não faz), então a pooler funciona normalmente sem o parâmetro. É
+  inofensivo incluir se o Supabase já colocar automaticamente, só não é o
+  que resolve nada aqui.
+- [ ] Guardar as duas connection strings (pooler + direta) para os
+      próximos passos.
 
 ## 2. Domínio + Resend (e-mail transacional)
 
@@ -39,7 +51,7 @@ Configurar em Project Settings → Environment Variables, ambiente
 
 | Variável | Valor |
 |---|---|
-| `DATABASE_URL` | connection string com pooling do passo 1 |
+| `DATABASE_URL` | a **Transaction pooler** do Supabase (porta 6543) do passo 1 — nunca a direta aqui |
 | `SESSION_SECRET` | **gerar uma nova** — `openssl rand -base64 32`. Nunca reusar o valor de dev/`.env` local. |
 | `APP_URL` | `https://seudominio.com` (o domínio de produção, com `https://`) |
 | `RESEND_API_KEY` | a API key gerada no passo 2 |
@@ -62,16 +74,18 @@ e `pnpm build`. É preciso aplicar as migrations manualmente antes do
 primeiro deploy, e a cada deploy que adicionar uma migration nova:
 
 ```bash
-DATABASE_URL="<a connection string de produção>" pnpm exec prisma migrate deploy
+DATABASE_URL="<a connection string DIRETA do Supabase, porta 5432>" pnpm exec prisma migrate deploy
 ```
 
-Rode isso da sua máquina (ou de qualquer lugar com acesso ao banco de
-produção) antes de apontar o deploy pra ele. Alternativa mais automática:
-sobrescrever o **Build Command** na Vercel para
-`pnpm exec prisma migrate deploy && pnpm build` — assim toda migration
-pendente é aplicada a cada build (a Vercel já injeta as env vars de
-produção no passo de build). Cuidado: isso roda a cada deploy, inclusive
-os automáticos de PR — se preferir mais controle, mantenha o passo manual.
+**Use a connection direta aqui, não a pooler.** `prisma migrate deploy` usa
+um advisory lock do Postgres pra evitar duas migrations rodando ao mesmo
+tempo — isso depende de todas as queries de uma migration caírem na mesma
+conexão física, o que o modo *transaction* do PgBouncer (a pooler do
+Supabase) não garante. Pela mesma razão, **não** vale sobrescrever o Build
+Command da Vercel para rodar `prisma migrate deploy` automaticamente ali —
+o ambiente de build da Vercel só teria acesso à `DATABASE_URL` (a pooler).
+Mantenha esse passo manual, rodado da sua máquina, antes de cada deploy que
+adicionar uma migration nova.
 
 ## 5. Primeiro admin da plataforma
 
@@ -81,7 +95,7 @@ cadastro público para o papel de admin da plataforma (por design — é
 global, não por empresa). Pra ter o primeiro admin:
 
 ```bash
-DATABASE_URL="<a connection string de produção>" pnpm exec tsx -e '
+DATABASE_URL="<a connection string DIRETA do Supabase, porta 5432>" pnpm exec tsx -e '
 import { PrismaClient } from "./src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import bcrypt from "bcryptjs";
