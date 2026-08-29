@@ -2,6 +2,7 @@ import { requireContext } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import { respondToJoinRequest } from "@/modules/affiliates/actions";
+import { AddAffiliateForm } from "./add-affiliate-form";
 
 const STATUS_LABEL: Record<string, string> = {
   INVITED: "Convidado",
@@ -43,6 +44,8 @@ export default async function AfiliadosPage() {
         <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">Afiliados</h1>
         <p className="mt-1 text-sm text-zinc-500">Aprove solicitações e acompanhe os afiliados das suas campanhas.</p>
       </div>
+
+      <AddAffiliateForm />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">
