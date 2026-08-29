@@ -3,7 +3,10 @@
 import { useActionState } from "react";
 import { updateAffiliateProfile } from "@/modules/affiliates/actions";
 import { TextField } from "@/components/ui/text-field";
+import { TextFieldWithLink } from "@/components/ui/text-field-with-link";
+import { WhatsappIconLink, InstagramIconLink } from "@/components/ui/social-icon-link";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { whatsappUrl, instagramProfileUrl } from "@/lib/contact-links";
 import type { FormState } from "@/lib/form-state";
 
 const initialState: FormState = undefined;
@@ -49,13 +52,15 @@ export function AffiliateProfileForm({ profile }: { profile: AffiliateProfileVal
           defaultValue={profile.email}
           errors={state?.errors?.email}
         />
-        <TextField
+        <TextFieldWithLink
           id="phone"
           name="phone"
           label="Telefone (opcional)"
           required={false}
           defaultValue={profile.phone ?? ""}
           errors={state?.errors?.phone}
+          buildHref={whatsappUrl}
+          renderIcon={(href) => <WhatsappIconLink href={href} />}
         />
       </div>
 
@@ -99,13 +104,15 @@ export function AffiliateProfileForm({ profile }: { profile: AffiliateProfileVal
       <div>
         <h2 className="mb-3 text-sm font-semibold text-zinc-950 dark:text-zinc-50">Redes sociais (opcional)</h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <TextField
+          <TextFieldWithLink
             id="instagramUrl"
             name="instagramUrl"
             label="Instagram"
             required={false}
             defaultValue={profile.instagramUrl ?? ""}
             errors={state?.errors?.instagramUrl}
+            buildHref={instagramProfileUrl}
+            renderIcon={(href) => <InstagramIconLink href={href} />}
           />
           <TextField
             id="tiktokUrl"

@@ -1,6 +1,8 @@
 import { requireContext } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
+import { WhatsappIconLink, InstagramIconLink } from "@/components/ui/social-icon-link";
+import { whatsappUrl, instagramProfileUrl } from "@/lib/contact-links";
 import { respondToJoinRequest } from "@/modules/affiliates/actions";
 import { AddAffiliateForm } from "./add-affiliate-form";
 
@@ -28,7 +30,9 @@ export default async function AfiliadosPage() {
     where: { campaign: { companyId } },
     include: {
       campaign: { select: { name: true } },
-      affiliateProfile: { select: { displayName: true } },
+      affiliateProfile: {
+        select: { displayName: true, instagramUrl: true, user: { select: { phone: true } } },
+      },
       coupons: { select: { code: true } },
       affiliateLinks: { select: { code: true } },
     },
@@ -106,24 +110,39 @@ export default async function AfiliadosPage() {
                   <th className="px-4 py-2 font-medium">Status</th>
                   <th className="px-4 py-2 font-medium">Cupom</th>
                   <th className="px-4 py-2 font-medium">Link</th>
+                  <th className="px-4 py-2 font-medium">Contato</th>
                 </tr>
               </thead>
               <tbody>
-                {others.map((participation) => (
-                  <tr key={participation.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-900">
-                    <td className="px-4 py-2 text-zinc-950 dark:text-zinc-50">{participation.affiliateProfile.displayName}</td>
-                    <td className="px-4 py-2 text-zinc-500">{participation.campaign.name}</td>
-                    <td className="px-4 py-2">
-                      <Badge tone={STATUS_TONE[participation.status]}>{STATUS_LABEL[participation.status]}</Badge>
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-zinc-500">
-                      {participation.coupons[0]?.code ?? "—"}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-zinc-500">
-                      {participation.affiliateLinks[0]?.code ?? "—"}
-                    </td>
-                  </tr>
-                ))}
+                {others.map((participation) => {
+                  const whatsapp = whatsappUrl(participation.affiliateProfile.user.phone);
+                  const instagram = instagramProfileUrl(participation.affiliateProfile.instagramUrl);
+                  return (
+                    <tr key={participation.id} className="border-b border-zinc-100 last:border-0 dark:border-zinc-900">
+                      <td className="px-4 py-2 text-zinc-950 dark:text-zinc-50">{participation.affiliateProfile.displayName}</td>
+                      <td className="px-4 py-2 text-zinc-500">{participation.campaign.name}</td>
+                      <td className="px-4 py-2">
+                        <Badge tone={STATUS_TONE[participation.status]}>{STATUS_LABEL[participation.status]}</Badge>
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs text-zinc-500">
+                        {participation.coupons[0]?.code ?? "—"}
+                      </td>
+                      <td className="px-4 py-2 font-mono text-xs text-zinc-500">
+                        {participation.affiliateLinks[0]?.code ?? "—"}
+                      </td>
+                      <td className="px-4 py-2">
+                        {whatsapp || instagram ? (
+                          <div className="flex items-center gap-1">
+                            {whatsapp && <WhatsappIconLink href={whatsapp} />}
+                            {instagram && <InstagramIconLink href={instagram} />}
+                          </div>
+                        ) : (
+                          <span className="text-zinc-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
