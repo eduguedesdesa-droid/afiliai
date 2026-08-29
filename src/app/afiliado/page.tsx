@@ -1,12 +1,13 @@
 import { getCurrentUser } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { StatCard, formatCentsBRL } from "@/components/dashboard/stat-card";
+import { ProfilePromptBanner } from "@/components/dashboard/profile-prompt-banner";
 
 export default async function AfiliadoDashboardPage() {
   const user = await getCurrentUser();
   const affiliateProfileId = user.affiliateProfile?.id ?? "";
 
-  const [campaignsCount, salesAgg, commissionsAgg, paidAgg] = await Promise.all([
+  const [campaignsCount, salesAgg, commissionsAgg, paidAgg, affiliateProfile] = await Promise.all([
     prisma.campaignAffiliate.count({
       where: { affiliateProfileId, status: "APPROVED" },
     }),
@@ -23,10 +24,12 @@ export default async function AfiliadoDashboardPage() {
       where: { campaignAffiliate: { affiliateProfileId }, status: "PAID" },
       _sum: { amountCents: true },
     }),
+    prisma.affiliateProfile.findUnique({ where: { id: affiliateProfileId }, select: { city: true } }),
   ]);
 
   return (
     <div className="flex flex-col gap-6">
+      <ProfilePromptBanner href="/afiliado/perfil" incomplete={!affiliateProfile?.city} />
       <div>
         <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">Dashboard</h1>
         <p className="mt-1 text-sm text-zinc-500">Acompanhe suas campanhas e ganhos como afiliado.</p>

@@ -1,12 +1,13 @@
 import { requireContext } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
 import { StatCard, formatCentsBRL } from "@/components/dashboard/stat-card";
+import { ProfilePromptBanner } from "@/components/dashboard/profile-prompt-banner";
 
 export default async function EmpresaDashboardPage() {
   const { context } = await requireContext("COMPANY_MEMBER");
   const companyId = context.type === "COMPANY_MEMBER" ? context.companyId : "";
 
-  const [campaignsCount, activeAffiliatesCount, salesAgg, commissionsAgg] = await Promise.all([
+  const [campaignsCount, activeAffiliatesCount, salesAgg, commissionsAgg, company] = await Promise.all([
     prisma.campaign.count({ where: { companyId } }),
     prisma.campaignAffiliate.count({
       where: { campaign: { companyId }, status: "APPROVED" },
@@ -20,10 +21,12 @@ export default async function EmpresaDashboardPage() {
       where: { campaignAffiliate: { campaign: { companyId } } },
       _sum: { amountCents: true },
     }),
+    prisma.company.findUnique({ where: { id: companyId }, select: { city: true } }),
   ]);
 
   return (
     <div className="flex flex-col gap-6">
+      <ProfilePromptBanner href="/empresa/perfil" incomplete={!company?.city} />
       <div>
         <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">Dashboard</h1>
         <p className="mt-1 text-sm text-zinc-500">Visão geral das suas campanhas de indicação e afiliados.</p>

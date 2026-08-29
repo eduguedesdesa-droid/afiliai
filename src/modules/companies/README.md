@@ -2,9 +2,14 @@
 
 Perfil da empresa, onboarding, configurações do tenant.
 
-**Status:** ainda não implementado — planejado para a Fase 1 do plano de implementação.
+**Status:** parcialmente implementado — perfil de contato da empresa
+(`updateCompanyProfile`, em `actions.ts` + `schemas.ts`): telefone, e-mail de
+contato, cidade, CNPJ (reaproveita `Company.document`, já existente) e redes
+sociais (Instagram, TikTok, outra). UI em `/empresa/perfil`, com um aviso
+dispensável no dashboard (`src/components/dashboard/profile-prompt-banner.tsx`)
+convidando a preencher quando a cidade ainda não foi informada.
 
-Ao implementar, seguir a convenção dos demais módulos: `service.ts` (regra de
-negócio), `repository.ts` (acesso a dado via Prisma), `schema.ts` (validação
-Zod dos inputs), `types.ts`. Nenhuma lógica de negócio deve viver em
-componentes React ou route handlers — sempre chamando uma função daqui.
+Ainda não implementado: onboarding, demais configurações do tenant (plano,
+segmento editável pela própria empresa, etc.). `service.ts` segue vazio —
+`updateCompanyProfile` é simples o bastante pra viver direto em `actions.ts`,
+seguindo o padrão de `modules/products`.

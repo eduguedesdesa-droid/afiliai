@@ -11,6 +11,7 @@ const NAV = [
   { href: "/empresa/comissoes", label: "Comissões" },
   { href: "/empresa/payouts", label: "Pagamentos" },
   { href: "/empresa/relatorios", label: "Relatórios" },
+  { href: "/empresa/perfil", label: "Perfil" },
 ];
 
 export default async function EmpresaLayout({ children }: { children: React.ReactNode }) {

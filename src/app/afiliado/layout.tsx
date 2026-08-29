@@ -9,6 +9,7 @@ const NAV = [
   { href: "/afiliado/cupons", label: "Cupons" },
   { href: "/afiliado/conversoes", label: "Conversões" },
   { href: "/afiliado/ganhos", label: "Ganhos" },
+  { href: "/afiliado/perfil", label: "Perfil" },
 ];
 
 export default async function AfiliadoLayout({ children }: { children: React.ReactNode }) {

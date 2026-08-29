@@ -85,8 +85,16 @@ model Company {
   segment   String? // vertical: varejo físico, e-commerce, serviços...
   status    CompanyStatus @default(ACTIVE)
   plan      String        @default("trial")
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  // Perfil público/de contato da empresa — preenchido e editado pela própria
+  // empresa em /empresa/perfil, distinto do e-mail de login do dono da conta.
+  phone          String?
+  email          String?
+  city           String?
+  instagramUrl   String?
+  tiktokUrl      String?
+  otherSocialUrl String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   userRoles        UserRole[]
   members          CompanyMember[]
@@ -148,11 +156,18 @@ model AffiliateProfile {
   userId      String                 @unique
   displayName String
   bio         String?
-  document    String?
+  document    String? // CPF/CNPJ
   payoutInfo  Json? // dados de recebimento (chave pix etc.) — considerar criptografia no futuro
-  status      AffiliateProfileStatus @default(ACTIVE)
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
+  // Perfil de contato do afiliado — preenchido e editado por ele em
+  // /afiliado/perfil. Nome/telefone/e-mail de login ficam em User; aqui só o
+  // que é específico do papel de afiliado.
+  city           String?
+  instagramUrl   String?
+  tiktokUrl      String?
+  otherSocialUrl String?
+  status         AffiliateProfileStatus @default(ACTIVE)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
 
   user               User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
   characteristics    AffiliateCharacteristics?
